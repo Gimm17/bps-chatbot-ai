@@ -47,13 +47,14 @@ final class BpsApiClient
 
         try {
             $resp = Http::timeout($this->timeoutSecs)->get($url);
+            $parsed = BpsResponse::parse($resp->json() ?? [], $resp->status());
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            throw new BpsApiException('BPS API connection failed: ' . $e->getMessage(), 0, $e);
+            throw new BpsApiException('BPS API connection failed (timeout or network error).', 0, $e);
+        } catch (BpsApiException $e) {
+            throw $e; // already a BpsApiException, rethrow as-is
         } catch (\Throwable $e) {
-            throw new BpsApiException('BPS API request failed: ' . $e->getMessage(), 0, $e);
+            throw new BpsApiException('BPS API request failed.', 0, $e);
         }
-
-        $parsed = BpsResponse::parse($resp->json() ?? [], $resp->status());
 
         if ($this->cacheEnabled && $parsed->isOk) {
             $this->cache->put($this->cachePrefix . md5($url), $parsed->toJson(), now()->addHours($this->cacheTtlHours));
@@ -88,6 +89,10 @@ final class BpsApiClient
         $query = array_filter($params, fn ($v) => $v !== null && $v !== '');
         $query['key'] = $this->key;
 
-        return rtrim($this->baseUrl, '/') . '/v1/api/' . trim($pathTemplate, '/') . '?' . http_build_query($query);
+        // BPS dataexim expects literal ';' to separate multi-HS codes (kodehs=01;02).
+        // http_build_query percent-encodes ';' to %3B — restore it.
+        $queryString = str_replace('%3B', ';', http_build_query($query));
+
+        return rtrim($this->baseUrl, '/') . '/v1/api/' . trim($pathTemplate, '/') . '?' . $queryString;
     }
 }

@@ -13,6 +13,7 @@ class BpsApiClientTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['bps.key' => 'test-key-123']);
         Cache::flush();
     }
 
@@ -25,7 +26,7 @@ class BpsApiClientTest extends TestCase
 
         $this->app->make(BpsApiClient::class)->get('/domain/model/domain', ['type' => 'all']);
 
-        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/key/32a4af778c0b74a62c19857b278cab33')
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/key/test-key-123')
             && str_contains($r->url(), '/type/all'));
     }
 
@@ -81,6 +82,21 @@ class BpsApiClientTest extends TestCase
 
         Http::assertSent(fn ($r) => str_contains($r->url(), 'dataexim')
             && str_contains($r->url(), 'sumber=1')
-            && str_contains($r->url(), 'key=32a4af778c0b74a62c19857b278cab33'));
+            && str_contains($r->url(), 'key=test-key-123'));
+    }
+
+    public function test_query_param_multi_hs_code_keeps_literal_semicolon(): void
+    {
+        Http::fake(['webapi.bps.go.id/v1/api/dataexim*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['page' => 1, 'pages' => 1, 'total' => 1], [['value' => 1000]]],
+        ], 200)]);
+
+        $this->app->make(BpsApiClient::class)->getQuery('/dataexim', [
+            'sumber' => '1', 'periode' => '2', 'kodehs' => '01;02', 'jenishs' => '1', 'Tahun' => '2019',
+        ]);
+
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'kodehs=01;02')
+            && ! str_contains($r->url(), 'kodehs=01%3B02'));
     }
 }
