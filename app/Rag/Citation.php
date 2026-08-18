@@ -49,6 +49,37 @@ final class Citation
         return $out;
     }
 
+    /**
+     * Map BPS source ids → Citation (verified:true).
+     * Hanya id yang ada di $sources dipetakan (LLM tak bisa minta id asing).
+     *
+     * @param  array<string, \App\Bps\BpsCitation>  $sources
+     * @param  list<string>  $sourceIds
+     * @return list<self>
+     */
+    public static function fromBpsSources(array $sources, array $sourceIds): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($sourceIds as $id) {
+            $id = trim($id);
+            if ($id === '' || isset($seen[$id]) || ! isset($sources[$id])) {
+                continue;
+            }
+            $seen[$id] = true;
+            $s = $sources[$id];
+            $out[] = new self(
+                sourceId: $s->sourceId,
+                title: $s->title,
+                url: $s->url,
+                snippet: $s->snippet,
+                verified: true,
+            );
+        }
+
+        return $out;
+    }
+
     private static function makeSnippet(string $content): string
     {
         // ambil paragraf pertama non-heading, max ~180 char
