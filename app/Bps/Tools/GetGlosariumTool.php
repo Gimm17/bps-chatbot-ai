@@ -23,13 +23,14 @@ final class GetGlosariumTool implements Tool
 
     public function handle(Request $request): string
     {
-        $id = $request->input('id');
+        $arguments = $request->all();
+        $id = $arguments['id'] ?? null;
         $params = $id
-            ? ['id' => (string) $id, 'lang' => $request->input('lang')]
+            ? ['id' => (string) $id, 'lang' => $arguments['lang'] ?? null]
             : [
-                'prefix' => $request->input('prefix'),
-                'page' => $request->input('page'),
-                'perpage' => $request->input('perpage'),
+                'prefix' => $arguments['prefix'] ?? null,
+                'page' => $arguments['page'] ?? null,
+                'perpage' => $arguments['perpage'] ?? null,
             ];
 
         try {

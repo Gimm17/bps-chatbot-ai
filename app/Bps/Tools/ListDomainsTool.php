@@ -21,9 +21,11 @@ final class ListDomainsTool implements Tool
 
     public function handle(Request $request): string
     {
-        $params = ['type' => (string) ($request->input('type') ?? 'all')];
-        if ($request->input('prov')) {
-            $params['prov'] = (string) $request->input('prov');
+        $arguments = $request->all();
+        $params = ['type' => (string) ($arguments['type'] ?? 'all')];
+        $prov = $arguments['prov'] ?? null;
+        if ($prov !== null && $prov !== '') {
+            $params['prov'] = (string) $prov;
         }
 
         try {

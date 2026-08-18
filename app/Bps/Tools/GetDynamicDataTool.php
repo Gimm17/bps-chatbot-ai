@@ -19,13 +19,15 @@ final class GetDynamicDataTool implements Tool
 
     public function handle(Request $request): string
     {
-        $domain = (string) $request->input('domain');
-        $var = (string) $request->input('var');
-        $th = (string) $request->input('th');
+        $arguments = $request->all();
+        $domain = (string) ($arguments['domain'] ?? '');
+        $var = (string) ($arguments['var'] ?? '');
+        $th = (string) ($arguments['th'] ?? '');
         $params = ['domain' => $domain, 'var' => $var, 'th' => $th];
         foreach (['vervar', 'turvar', 'turth'] as $key) {
-            if ($request->input($key) !== null && $request->input($key) !== '') {
-                $params[$key] = (string) $request->input($key);
+            $value = $arguments[$key] ?? null;
+            if ($value !== null && $value !== '') {
+                $params[$key] = (string) $value;
             }
         }
 

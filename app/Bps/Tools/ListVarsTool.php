@@ -19,10 +19,12 @@ final class ListVarsTool implements Tool
 
     public function handle(Request $request): string
     {
-        $params = ['domain' => (string) $request->input('domain')];
+        $arguments = $request->all();
+        $params = ['domain' => (string) ($arguments['domain'] ?? '')];
         foreach (['subject', 'lang', 'year', 'page'] as $key) {
-            if ($request->input($key) !== null && $request->input($key) !== '') {
-                $params[$key] = (string) $request->input($key);
+            $value = $arguments[$key] ?? null;
+            if ($value !== null && $value !== '') {
+                $params[$key] = (string) $value;
             }
         }
 
