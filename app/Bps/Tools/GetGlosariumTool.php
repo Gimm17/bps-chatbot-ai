@@ -14,6 +14,8 @@ use Laravel\Ai\Tools\Request;
  */
 final class GetGlosariumTool implements Tool
 {
+    private const MAX_RESULTS = 100;
+
     public function __construct(private readonly BpsApiClient $client) {}
 
     public function description(): string
@@ -42,25 +44,39 @@ final class GetGlosariumTool implements Tool
             return $this->err($resp->errorMessage ?? 'BPS API error');
         }
 
-        $rows = array_map(function (array $row): array {
+        $rows = [];
+        foreach ($resp->rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
             $id = $row['id'] ?? $row['glosarium_id'] ?? null;
             $term = $row['term'] ?? $row['istilah'] ?? $row['title'] ?? null;
             $definition = $row['definition'] ?? $row['def_text'] ?? $row['def'] ?? null;
-            if ($id === null && $term === null && $definition === null) {
-                return ['raw' => $row];
+            $rows[] = $id === null && $term === null && $definition === null
+                ? ['raw' => $row]
+                : ['id' => $id, 'term' => $term, 'definition' => $definition];
+
+            if (count($rows) === self::MAX_RESULTS) {
+                break;
             }
+        }
+        $returned = count($rows);
 
-            return ['id' => $id, 'term' => $term, 'definition' => $definition];
-        }, $resp->rows);
-
-        return (string) json_encode(['status' => 'ok', 'total' => $resp->total, 'terms' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode([
+            'status' => 'ok',
+            'total' => $resp->total,
+            'returned' => $returned,
+            'truncated' => $resp->total > $returned,
+            'terms' => $rows,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
             'id' => $schema->string()->description('ID glosarium untuk detail'),
-            'lang' => $schema->string()->description('Bahasa detail, misalnya ind atau eng'),
+            'lang' => $schema->string()->enum(['ind', 'eng'])->description('Bahasa detail'),
             'prefix' => $schema->string()->description('Awalan istilah untuk daftar'),
             'page' => $schema->integer()->description('Halaman daftar'),
             'perpage' => $schema->integer()->description('Jumlah hasil per halaman'),

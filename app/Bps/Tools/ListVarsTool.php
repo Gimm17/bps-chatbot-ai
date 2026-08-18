@@ -10,6 +10,8 @@ use Laravel\Ai\Tools\Request;
 
 final class ListVarsTool implements Tool
 {
+    private const MAX_RESULTS = 100;
+
     public function __construct(private readonly BpsApiClient $client) {}
 
     public function description(): string
@@ -45,9 +47,16 @@ final class ListVarsTool implements Tool
             'sub_name' => $r['sub_name'] ?? null,
             'def' => $r['def'] ?? null,
             'notes' => $r['notes'] ?? null,
-        ], $resp->rows);
+        ], array_slice($resp->rows, 0, self::MAX_RESULTS));
+        $returned = count($rows);
 
-        return (string) json_encode(['status' => 'ok', 'total' => $resp->total, 'variables' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode([
+            'status' => 'ok',
+            'total' => $resp->total,
+            'returned' => $returned,
+            'truncated' => $resp->total > $returned,
+            'variables' => $rows,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function schema(JsonSchema $schema): array
@@ -55,7 +64,7 @@ final class ListVarsTool implements Tool
         return [
             'domain' => $schema->string()->required()->description('Domain id BPS; gunakan ListDomainsTool bila belum diketahui'),
             'subject' => $schema->string()->description('Subject id opsional'),
-            'lang' => $schema->string()->description('Bahasa opsional'),
+            'lang' => $schema->string()->enum(['ind', 'eng'])->description('Bahasa opsional'),
             'year' => $schema->string()->description('Tahun opsional'),
             'page' => $schema->integer()->description('Halaman opsional'),
         ];

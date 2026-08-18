@@ -45,6 +45,34 @@ class GetGlosariumToolTest extends BpsToolTestCase
         $this->assertSame(['kode' => 'X', 'makna' => 'Y'], $result['terms'][0]['raw']);
     }
 
+    public function test_skips_malformed_non_array_rows(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 3], ['invalid', null, ['id' => 9, 'term' => 'Valid']]],
+        ])]);
+
+        $result = json_decode((new GetGlosariumTool($this->client()))->handle($this->request()), true);
+
+        $this->assertCount(1, $result['terms']);
+        $this->assertSame('Valid', $result['terms'][0]['term']);
+    }
+
+    public function test_bounds_glossary_results_and_reports_truncation(): void
+    {
+        $rows = array_map(fn ($id) => ['id' => $id, 'term' => "Term {$id}"], range(1, 101));
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 101], $rows],
+        ])]);
+
+        $result = json_decode((new GetGlosariumTool($this->client()))->handle($this->request()), true);
+
+        $this->assertCount(100, $result['terms']);
+        $this->assertSame(100, $result['returned']);
+        $this->assertTrue($result['truncated']);
+    }
+
     public function test_non_ok_response_returns_error_json(): void
     {
         Http::fake(['webapi.bps.go.id/*' => Http::response(['status' => 'Error', 'message' => 'Please re-check your URL Request.'], 200)]);

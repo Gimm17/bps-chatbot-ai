@@ -28,11 +28,27 @@ class ListDomainsToolTest extends BpsToolTestCase
         $this->assertSame('https://jabar.bps.go.id', $result['domains'][0]['domain_url']);
     }
 
-    public function test_schema_contains_required_type(): void
+    public function test_schema_contains_required_type_enum(): void
     {
         $schema = (new ListDomainsTool($this->client()))->schema($this->schema());
         $this->assertArrayHasKey('type', $schema);
         $this->assertSame(['type'], array_keys(array_filter($schema, fn ($field) => (new \ReflectionProperty($field, 'required'))->getValue($field) === true)));
+        $this->assertSame(['all', 'prov', 'kab', 'kabbyprov'], $schema['type']->toArray()['enum']);
+    }
+
+    public function test_bounds_domain_results_and_reports_truncation(): void
+    {
+        $rows = array_map(fn ($id) => ['domain_id' => (string) $id, 'domain_name' => "Domain {$id}"], range(1, 102));
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 102], $rows],
+        ])]);
+
+        $result = json_decode((new ListDomainsTool($this->client()))->handle($this->request(['type' => 'all'])), true);
+
+        $this->assertCount(100, $result['domains']);
+        $this->assertSame(100, $result['returned']);
+        $this->assertTrue($result['truncated']);
     }
 
     public function test_bps_api_exception_returns_safe_error_json(): void

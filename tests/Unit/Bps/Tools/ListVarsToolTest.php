@@ -36,6 +36,21 @@ class ListVarsToolTest extends BpsToolTestCase
         }
     }
 
+    public function test_bounds_variable_results_and_reports_truncation(): void
+    {
+        $rows = array_map(fn ($id) => ['var_id' => $id, 'title' => "Variable {$id}"], range(1, 101));
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 101], $rows],
+        ])]);
+
+        $result = json_decode((new ListVarsTool($this->client()))->handle($this->request(['domain' => '0000'])), true);
+
+        $this->assertCount(100, $result['variables']);
+        $this->assertSame(100, $result['returned']);
+        $this->assertTrue($result['truncated']);
+    }
+
     public function test_non_ok_response_returns_error_json(): void
     {
         Http::fake(['webapi.bps.go.id/*' => Http::response(['status' => 'Error', 'message' => 'Bad variable'], 200)]);

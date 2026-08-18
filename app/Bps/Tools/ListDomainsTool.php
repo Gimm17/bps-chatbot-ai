@@ -10,6 +10,8 @@ use Laravel\Ai\Tools\Request;
 
 final class ListDomainsTool implements Tool
 {
+    private const MAX_RESULTS = 100;
+
     public function __construct(private readonly BpsApiClient $client) {}
 
     public function description(): string
@@ -41,15 +43,22 @@ final class ListDomainsTool implements Tool
             'domain_id' => $r['domain_id'] ?? null,
             'domain_name' => $r['domain_name'] ?? null,
             'domain_url' => $r['domain_url'] ?? null,
-        ], $resp->rows);
+        ], array_slice($resp->rows, 0, self::MAX_RESULTS));
+        $returned = count($rows);
 
-        return (string) json_encode(['status' => 'ok', 'total' => $resp->total, 'domains' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode([
+            'status' => 'ok',
+            'total' => $resp->total,
+            'returned' => $returned,
+            'truncated' => $resp->total > $returned,
+            'domains' => $rows,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
-            'type' => $schema->string()->required()->description('all | prov | kab | kabbyprov'),
+            'type' => $schema->string()->enum(['all', 'prov', 'kab', 'kabbyprov'])->required()->description('Jenis domain BPS'),
             'prov' => $schema->string()->description('4-digit province id, wajib bila type=kabbyprov'),
         ];
     }

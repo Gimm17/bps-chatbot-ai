@@ -10,6 +10,8 @@ use Laravel\Ai\Tools\Request;
 
 final class GetDynamicDataTool implements Tool
 {
+    private const MAX_RESULTS = 100;
+
     public function __construct(private readonly BpsApiClient $client) {}
 
     public function description(): string
@@ -41,10 +43,13 @@ final class GetDynamicDataTool implements Tool
         }
 
         $raw = $resp->raw;
+        $dataContent = is_array($raw['datacontent'] ?? null) ? $raw['datacontent'] : [];
+        $total = count($dataContent);
         $values = [];
-        foreach ((array) ($raw['datacontent'] ?? []) as $key => $value) {
+        foreach (array_slice($dataContent, 0, self::MAX_RESULTS, true) as $key => $value) {
             $values[] = ['key' => (string) $key, 'value' => $value];
         }
+        $returned = count($values);
 
         return (string) json_encode([
             'status' => 'ok',
@@ -52,11 +57,16 @@ final class GetDynamicDataTool implements Tool
             'var_id' => $var,
             'period_id' => $th,
             'last_update' => $raw['last_update'] ?? null,
-            'variable' => (array) ($raw['var'] ?? []),
-            'vertical_variables' => (array) ($raw['vervar'] ?? []),
-            'derived_variables' => (array) ($raw['turvar'] ?? []),
-            'periods' => (array) ($raw['tahun'] ?? []),
-            'derived_periods' => (array) ($raw['turtahun'] ?? []),
+            'subjects' => is_array($raw['subject'] ?? null) ? $raw['subject'] : [],
+            'variable' => is_array($raw['var'] ?? null) ? $raw['var'] : [],
+            'vertical_variable_label' => is_string($raw['labelvervar'] ?? null) ? $raw['labelvervar'] : null,
+            'vertical_variables' => is_array($raw['vervar'] ?? null) ? $raw['vervar'] : [],
+            'derived_variables' => is_array($raw['turvar'] ?? null) ? $raw['turvar'] : [],
+            'periods' => is_array($raw['tahun'] ?? null) ? $raw['tahun'] : [],
+            'derived_periods' => is_array($raw['turtahun'] ?? null) ? $raw['turtahun'] : [],
+            'total' => $total,
+            'returned' => $returned,
+            'truncated' => $total > $returned,
             'values' => $values,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

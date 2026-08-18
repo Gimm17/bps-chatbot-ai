@@ -116,4 +116,46 @@ class BpsApiClientTest extends TestCase
         Http::assertSent(fn ($r) => str_contains($r->url(), 'kodehs=01;02')
             && ! str_contains($r->url(), 'kodehs=01%3B02'));
     }
+
+    public function test_legacy_cache_entries_are_ignored(): void
+    {
+        $url = 'https://webapi.bps.go.id/v1/api/domain/model/domain/type/all/key/test-key-123';
+        Cache::put('bps:'.md5($url), json_encode([
+            'isOk' => true,
+            'rows' => [['domain_id' => 'legacy']],
+            'pages' => 1,
+            'total' => 1,
+            'httpStatus' => 200,
+        ]));
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 1], [['domain_id' => 'fresh']]],
+        ])]);
+
+        $response = $this->app->make(BpsApiClient::class)->get('/domain/model/domain', ['type' => 'all']);
+
+        $this->assertSame('fresh', $response->rows[0]['domain_id']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_response_payload_is_recursively_redacted_before_parse_and_cache(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'debug' => [
+                'url' => 'https://webapi.bps.go.id/v1/api/list/key/test-key-123',
+                'nested' => ['credential' => 'test-key-123'],
+            ],
+            'data' => [['pages' => 1, 'total' => 0], []],
+        ])]);
+
+        $client = $this->app->make(BpsApiClient::class);
+        $first = $client->get('/domain/model/domain', ['type' => 'all']);
+        $cached = $client->get('/domain/model/domain', ['type' => 'all']);
+
+        $this->assertStringNotContainsString('test-key-123', json_encode($first->raw));
+        $this->assertStringContainsString('[REDACTED]', json_encode($first->raw));
+        $this->assertSame($first->raw, $cached->raw);
+        Http::assertSentCount(1);
+    }
 }

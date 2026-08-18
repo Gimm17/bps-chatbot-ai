@@ -36,6 +36,35 @@ class GetDynamicDataToolTest extends BpsToolTestCase
         $this->assertSame('Perempuan', $result['derived_variables'][1]['label']);
         $this->assertSame('2023', $result['periods'][0]['label']);
         $this->assertSame('Tahun', $result['derived_periods'][0]['label']);
+        $this->assertSame('Komunikasi', $result['subjects'][0]['label']);
+        $this->assertSame('Provinsi', $result['vertical_variable_label']);
+    }
+
+    public function test_scalar_datacontent_returns_no_values(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response(array_replace($this->verifiedBody, ['datacontent' => 'invalid']))]);
+
+        $result = json_decode((new GetDynamicDataTool($this->client()))->handle($this->request(['domain' => '0000', 'var' => '70', 'th' => '123'])), true);
+
+        $this->assertSame([], $result['values']);
+        $this->assertSame(0, $result['returned']);
+        $this->assertFalse($result['truncated']);
+    }
+
+    public function test_bounds_dynamic_values_and_reports_truncation(): void
+    {
+        $content = [];
+        foreach (range(1, 101) as $id) {
+            $content[(string) $id] = $id;
+        }
+        Http::fake(['webapi.bps.go.id/*' => Http::response(array_replace($this->verifiedBody, ['datacontent' => $content]))]);
+
+        $result = json_decode((new GetDynamicDataTool($this->client()))->handle($this->request(['domain' => '0000', 'var' => '70', 'th' => '123'])), true);
+
+        $this->assertCount(100, $result['values']);
+        $this->assertSame(101, $result['total']);
+        $this->assertSame(100, $result['returned']);
+        $this->assertTrue($result['truncated']);
     }
 
     public function test_non_ok_response_returns_error_json(): void
