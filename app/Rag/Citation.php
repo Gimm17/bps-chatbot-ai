@@ -2,6 +2,8 @@
 
 namespace App\Rag;
 
+use App\Bps\BpsCitation;
+
 /**
  * DTO citation yang aman untuk dikirim ke client.
  * URL hanya dari registry backend, tidak dari output LLM.
@@ -53,7 +55,7 @@ final class Citation
      * Map BPS source ids → Citation (verified:true).
      * Hanya id yang ada di $sources dipetakan (LLM tak bisa minta id asing).
      *
-     * @param  array<string, \App\Bps\BpsCitation>  $sources
+     * @param  array<string, BpsCitation>  $sources
      * @param  list<string>  $sourceIds
      * @return list<Citation>
      */
@@ -71,7 +73,7 @@ final class Citation
             }
             $seen[$id] = true;
             $s = $sources[$id];
-            if (! $s instanceof \App\Bps\BpsCitation) {
+            if (! $s instanceof BpsCitation) {
                 continue;
             }
             $out[] = new self(

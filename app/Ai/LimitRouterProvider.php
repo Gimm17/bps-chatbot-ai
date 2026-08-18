@@ -39,6 +39,61 @@ final class LimitRouterProvider implements AiProviderInterface
         );
     }
 
+    public function chatWithTools(ChatProviderInput $input, iterable $tools, int $maxToolCalls = 4): ChatProviderOutput
+    {
+        $timeout = $input->timeout ?? (int) config('ai.app.timeout', 30);
+        $model = $input->model ?? (string) config('ai.app.default_model', 'gpt-4o-mini');
+        $budget = max(0, $maxToolCalls);
+        $used = 0;
+        $consume = static function () use (&$used, $budget): bool {
+            if ($used >= $budget) {
+                return false;
+            }
+
+            $used++;
+
+            return true;
+        };
+        $budgetedTools = [];
+        foreach ($tools as $tool) {
+            $budgetedTools[] = new BudgetedTool($tool, $consume);
+        }
+
+        $agent = new ToolCappedAgent(
+            instructions: $input->instructions ?? '',
+            messages: $input->messages,
+            tools: $budgetedTools,
+            stepLimit: $budget + 1,
+        );
+        $response = $agent->prompt(
+            '',
+            provider: 'limitrouter',
+            model: $model,
+            timeout: $timeout,
+        );
+        $text = trim((string) $response->text);
+
+        if ($text === '') {
+            $synthesisAgent = new ToolCappedAgent(
+                instructions: $input->instructions ?? '',
+                messages: [...$input->messages, ...$response->messages],
+                tools: [],
+                stepLimit: 1,
+            );
+            $text = trim((string) $synthesisAgent->prompt(
+                '',
+                provider: 'limitrouter',
+                model: $model,
+                timeout: $timeout,
+            )->text);
+        }
+
+        return new ChatProviderOutput(
+            text: $text !== '' ? $text : '{"status":"no_evidence","answer":null,"clarificationQuestion":null,"citationSourceIds":[]}',
+            model: $model,
+        );
+    }
+
     public function listModels(): array
     {
         $base = (string) config('ai.providers.limitrouter.url', 'https://limitrouter.com/v1');

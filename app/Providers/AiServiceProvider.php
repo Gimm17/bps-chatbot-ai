@@ -7,6 +7,7 @@ use App\Ai\ChatService;
 use App\Ai\LimitRouterProvider;
 use App\Ai\PromptBuilder;
 use App\Ai\ScopeGuard;
+use App\Bps\BpsAgent;
 use App\Rag\RetrieverInterface;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,12 +21,13 @@ class AiServiceProvider extends ServiceProvider
         });
         $this->app->singleton(PromptBuilder::class);
 
-        $this->app->singleton(ChatService::class, function ($app) {
+        $this->app->scoped(ChatService::class, function ($app) {
             return new ChatService(
                 $app->make(AiProviderInterface::class),
                 $app->make(RetrieverInterface::class),
                 $app->make(ScopeGuard::class),
                 $app->make(PromptBuilder::class),
+                $app->make(BpsAgent::class),
             );
         });
     }

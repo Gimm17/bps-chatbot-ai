@@ -37,6 +37,7 @@ final class ChatResponse implements JsonSerializable
                 'title' => $c->title,
                 'url' => $c->url,
                 'snippet' => $c->snippet,
+                'verified' => $c->verified,
             ], $this->citations);
         }
 

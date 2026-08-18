@@ -4,6 +4,7 @@ namespace Tests\Unit\Bps;
 
 use App\Bps\BpsApiClient;
 use App\Bps\BpsApiException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -28,6 +29,22 @@ class BpsApiClientTest extends TestCase
 
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/key/test-key-123')
             && str_contains($r->url(), '/type/all'));
+    }
+
+    public function test_cache_roundtrip_preserves_top_level_raw_payload(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'datacontent' => ['1400702121230' => 71.11],
+        ], 200)]);
+
+        $client = $this->app->make(BpsApiClient::class);
+        $first = $client->get('/list/model/data', ['domain' => '0000', 'var' => '70', 'th' => '123']);
+        $cached = $client->get('/list/model/data', ['domain' => '0000', 'var' => '70', 'th' => '123']);
+
+        $this->assertSame(71.11, $first->raw['datacontent']['1400702121230']);
+        $this->assertSame($first->raw, $cached->raw);
+        Http::assertSentCount(1);
     }
 
     public function test_cache_hit_skips_http(): void
@@ -62,7 +79,7 @@ class BpsApiClientTest extends TestCase
     public function test_timeout_throws_exception(): void
     {
         Http::fake(['webapi.bps.go.id/*' => function () {
-            throw new \Illuminate\Http\Client\ConnectionException('timeout');
+            throw new ConnectionException('timeout');
         }]);
 
         $this->expectException(BpsApiException::class);
@@ -98,5 +115,47 @@ class BpsApiClientTest extends TestCase
 
         Http::assertSent(fn ($r) => str_contains($r->url(), 'kodehs=01;02')
             && ! str_contains($r->url(), 'kodehs=01%3B02'));
+    }
+
+    public function test_legacy_cache_entries_are_ignored(): void
+    {
+        $url = 'https://webapi.bps.go.id/v1/api/domain/model/domain/type/all/key/test-key-123';
+        Cache::put('bps:'.md5($url), json_encode([
+            'isOk' => true,
+            'rows' => [['domain_id' => 'legacy']],
+            'pages' => 1,
+            'total' => 1,
+            'httpStatus' => 200,
+        ]));
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'data' => [['pages' => 1, 'total' => 1], [['domain_id' => 'fresh']]],
+        ])]);
+
+        $response = $this->app->make(BpsApiClient::class)->get('/domain/model/domain', ['type' => 'all']);
+
+        $this->assertSame('fresh', $response->rows[0]['domain_id']);
+        Http::assertSentCount(1);
+    }
+
+    public function test_response_payload_is_recursively_redacted_before_parse_and_cache(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'debug' => [
+                'url' => 'https://webapi.bps.go.id/v1/api/list/key/test-key-123',
+                'nested' => ['credential' => 'test-key-123'],
+            ],
+            'data' => [['pages' => 1, 'total' => 0], []],
+        ])]);
+
+        $client = $this->app->make(BpsApiClient::class);
+        $first = $client->get('/domain/model/domain', ['type' => 'all']);
+        $cached = $client->get('/domain/model/domain', ['type' => 'all']);
+
+        $this->assertStringNotContainsString('test-key-123', json_encode($first->raw));
+        $this->assertStringContainsString('[REDACTED]', json_encode($first->raw));
+        $this->assertSame($first->raw, $cached->raw);
+        Http::assertSentCount(1);
     }
 }

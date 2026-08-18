@@ -1,0 +1,90 @@
+<?php
+
+namespace App\Bps\Tools;
+
+use App\Bps\BpsApiClient;
+use App\Bps\BpsApiException;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Tools\Request;
+
+final class GetDynamicDataTool implements Tool
+{
+    private const MAX_RESULTS = 100;
+
+    public function __construct(private readonly BpsApiClient $client) {}
+
+    public function description(): string
+    {
+        return 'Ambil nilai data dinamis BPS setelah domain, var id, dan period id (th) diketahui. Pertahankan kamus label resmi dan key komposit mentah.';
+    }
+
+    public function handle(Request $request): string
+    {
+        $arguments = $request->all();
+        $domain = (string) ($arguments['domain'] ?? '');
+        $var = (string) ($arguments['var'] ?? '');
+        $th = (string) ($arguments['th'] ?? '');
+        $params = ['domain' => $domain, 'var' => $var, 'th' => $th];
+        foreach (['vervar', 'turvar', 'turth'] as $key) {
+            $value = $arguments[$key] ?? null;
+            if ($value !== null && $value !== '') {
+                $params[$key] = (string) $value;
+            }
+        }
+
+        try {
+            $resp = $this->client->get('/list/model/data', $params);
+        } catch (BpsApiException $e) {
+            return $this->err($e->getMessage());
+        }
+        if (! $resp->isOk) {
+            return $this->err($resp->errorMessage ?? 'BPS API error');
+        }
+
+        $raw = $resp->raw;
+        $dataContent = is_array($raw['datacontent'] ?? null) ? $raw['datacontent'] : [];
+        $total = count($dataContent);
+        $values = [];
+        foreach (array_slice($dataContent, 0, self::MAX_RESULTS, true) as $key => $value) {
+            $values[] = ['key' => (string) $key, 'value' => $value];
+        }
+        $returned = count($values);
+
+        return (string) json_encode([
+            'status' => 'ok',
+            'domain' => $domain,
+            'var_id' => $var,
+            'period_id' => $th,
+            'last_update' => $raw['last_update'] ?? null,
+            'subjects' => is_array($raw['subject'] ?? null) ? $raw['subject'] : [],
+            'variable' => is_array($raw['var'] ?? null) ? $raw['var'] : [],
+            'vertical_variable_label' => is_string($raw['labelvervar'] ?? null) ? $raw['labelvervar'] : null,
+            'vertical_variables' => is_array($raw['vervar'] ?? null) ? $raw['vervar'] : [],
+            'derived_variables' => is_array($raw['turvar'] ?? null) ? $raw['turvar'] : [],
+            'periods' => is_array($raw['tahun'] ?? null) ? $raw['tahun'] : [],
+            'derived_periods' => is_array($raw['turtahun'] ?? null) ? $raw['turtahun'] : [],
+            'total' => $total,
+            'returned' => $returned,
+            'truncated' => $total > $returned,
+            'values' => $values,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'domain' => $schema->string()->required()->description('Domain id BPS'),
+            'var' => $schema->string()->required()->description('Variable id dari ListVarsTool'),
+            'th' => $schema->string()->required()->description('Period id dari daftar periode variabel'),
+            'vervar' => $schema->string()->description('Filter vertical variable id'),
+            'turvar' => $schema->string()->description('Filter derived variable id'),
+            'turth' => $schema->string()->description('Filter derived period id'),
+        ];
+    }
+
+    private function err(string $m): string
+    {
+        return (string) json_encode(['status' => 'error', 'message' => $m], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+}

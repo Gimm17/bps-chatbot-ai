@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Ai\AiProviderInterface;
+use App\Ai\PromptBuilder;
+use App\Bps\BpsAgent;
 use App\Bps\BpsApiClient;
+use App\Bps\BpsToolRegistry;
 use App\Rag\DemoLexicalRetriever;
 use App\Rag\KnowledgeLoader;
 use App\Rag\RetrieverInterface;
@@ -36,5 +40,17 @@ class RagServiceProvider extends ServiceProvider
                 cache: $app->make(Repository::class),
             );
         });
+
+        $this->app->singleton(BpsToolRegistry::class, fn ($app) => new BpsToolRegistry(
+            $app->make(BpsApiClient::class),
+        ));
+
+        $this->app->scoped(BpsAgent::class, fn ($app) => new BpsAgent(
+            provider: $app->make(AiProviderInterface::class),
+            registry: $app->make(BpsToolRegistry::class),
+            promptBuilder: $app->make(PromptBuilder::class),
+            maxToolCalls: (int) config('bps.agent.max_tool_calls', 4),
+            timeoutSec: (int) config('bps.agent.timeout_sec', 60),
+        ));
     }
 }

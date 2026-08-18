@@ -16,6 +16,7 @@ final class BpsResponse
     public function __construct(
         public readonly bool $isOk,
         public readonly array $rows,
+        public readonly array $raw,
         public readonly int $pages,
         public readonly int $total,
         public readonly ?string $errorMessage,
@@ -30,7 +31,8 @@ final class BpsResponse
 
         if ($status !== 'OK' || $availability !== 'available') {
             $msg = (string) ($body['message'] ?? ($body['message2'] ?? 'BPS API returned non-OK status'));
-            return new self(false, [], 0, 0, $msg, $httpStatus);
+
+            return new self(false, [], $body, 0, 0, $msg, $httpStatus);
         }
 
         $data = $body['data'] ?? [];
@@ -40,6 +42,7 @@ final class BpsResponse
         return new self(
             isOk: true,
             rows: $rows,
+            raw: $body,
             pages: (int) ($meta['pages'] ?? 1),
             total: (int) ($meta['total'] ?? count($rows)),
             errorMessage: null,
@@ -50,9 +53,11 @@ final class BpsResponse
     public static function fromCached(string $json): self
     {
         $a = json_decode($json, true) ?: [];
+
         return new self(
             isOk: (bool) ($a['isOk'] ?? false),
             rows: (array) ($a['rows'] ?? []),
+            raw: (array) ($a['raw'] ?? []),
             pages: (int) ($a['pages'] ?? 1),
             total: (int) ($a['total'] ?? 0),
             errorMessage: $a['errorMessage'] ?? null,
@@ -63,7 +68,7 @@ final class BpsResponse
     public function toJson(): string
     {
         return (string) json_encode([
-            'isOk' => $this->isOk, 'rows' => $this->rows,
+            'isOk' => $this->isOk, 'rows' => $this->rows, 'raw' => $this->raw,
             'pages' => $this->pages, 'total' => $this->total,
             'errorMessage' => $this->errorMessage, 'httpStatus' => $this->httpStatus,
         ], JSON_UNESCAPED_UNICODE);
