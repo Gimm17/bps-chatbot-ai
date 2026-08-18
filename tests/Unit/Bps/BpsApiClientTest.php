@@ -4,6 +4,7 @@ namespace Tests\Unit\Bps;
 
 use App\Bps\BpsApiClient;
 use App\Bps\BpsApiException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -28,6 +29,22 @@ class BpsApiClientTest extends TestCase
 
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/key/test-key-123')
             && str_contains($r->url(), '/type/all'));
+    }
+
+    public function test_cache_roundtrip_preserves_top_level_raw_payload(): void
+    {
+        Http::fake(['webapi.bps.go.id/*' => Http::response([
+            'status' => 'OK', 'data-availability' => 'available',
+            'datacontent' => ['1400702121230' => 71.11],
+        ], 200)]);
+
+        $client = $this->app->make(BpsApiClient::class);
+        $first = $client->get('/list/model/data', ['domain' => '0000', 'var' => '70', 'th' => '123']);
+        $cached = $client->get('/list/model/data', ['domain' => '0000', 'var' => '70', 'th' => '123']);
+
+        $this->assertSame(71.11, $first->raw['datacontent']['1400702121230']);
+        $this->assertSame($first->raw, $cached->raw);
+        Http::assertSentCount(1);
     }
 
     public function test_cache_hit_skips_http(): void
@@ -62,7 +79,7 @@ class BpsApiClientTest extends TestCase
     public function test_timeout_throws_exception(): void
     {
         Http::fake(['webapi.bps.go.id/*' => function () {
-            throw new \Illuminate\Http\Client\ConnectionException('timeout');
+            throw new ConnectionException('timeout');
         }]);
 
         $this->expectException(BpsApiException::class);

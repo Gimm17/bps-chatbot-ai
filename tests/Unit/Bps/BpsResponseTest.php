@@ -11,9 +11,10 @@ class BpsResponseTest extends TestCase
     {
         $raw = [
             'status' => 'OK', 'data-availability' => 'available',
+            'datacontent' => ['1400702121230' => 71.11],
             'data' => [['page' => 1, 'pages' => 1, 'total' => 2],
                 [['domain_id' => '0000', 'domain_name' => 'Pusat'],
-                 ['domain_id' => '1100', 'domain_name' => 'Aceh']]],
+                    ['domain_id' => '1100', 'domain_name' => 'Aceh']]],
         ];
 
         $resp = BpsResponse::parse($raw, 200);
@@ -23,15 +24,18 @@ class BpsResponseTest extends TestCase
         $this->assertCount(2, $resp->rows);
         $this->assertSame('0000', $resp->rows[0]['domain_id']);
         $this->assertSame(2, $resp->total);
+        $this->assertSame(['1400702121230' => 71.11], $resp->raw['datacontent']);
     }
 
     public function test_parse_error_status_not_ok(): void
     {
-        $resp = BpsResponse::parse(['status' => 'Error', 'message' => 'Parameter Type is Missing.'], 200);
+        $body = ['status' => 'Error', 'message' => 'Parameter Type is Missing.'];
+        $resp = BpsResponse::parse($body, 200);
 
         $this->assertFalse($resp->isOk);
         $this->assertSame('Parameter Type is Missing.', $resp->errorMessage);
         $this->assertSame([], $resp->rows);
+        $this->assertSame($body, $resp->raw);
     }
 
     public function test_parse_data_availability_na(): void
@@ -51,6 +55,7 @@ class BpsResponseTest extends TestCase
     {
         $resp = BpsResponse::parse([
             'status' => 'OK', 'data-availability' => 'available',
+            'datacontent' => ['key' => 99],
             'data' => [['page' => 1, 'pages' => 1, 'total' => 1], [['id' => 'x']]],
         ], 200);
 
@@ -58,6 +63,7 @@ class BpsResponseTest extends TestCase
 
         $this->assertTrue($restored->isOk);
         $this->assertSame('x', $restored->rows[0]['id']);
+        $this->assertSame(['key' => 99], $restored->raw['datacontent']);
     }
 
     public function test_parse_error_uses_message2_fallback(): void
