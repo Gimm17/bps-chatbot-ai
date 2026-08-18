@@ -3,10 +3,10 @@
 return [
     'key' => env('BPS_WEBAPI_KEY', ''),
     'base_url' => env('BPS_WEBAPI_BASE_URL', 'https://webapi.bps.go.id'),
-    'enabled' => (bool) env('BPS_ENABLED', true),
+    'enabled' => filter_var(env('BPS_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
 
     'cache' => [
-        'enabled' => (bool) env('BPS_CACHE_ENABLED', true),
+        'enabled' => filter_var(env('BPS_CACHE_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
         'ttl_hours' => (int) env('BPS_CACHE_TTL_HOURS', 24),
         'prefix' => 'bps:',
     ],
@@ -20,5 +20,5 @@ return [
         'timeout_sec' => (int) env('BPS_HTTP_TIMEOUT_SEC', 15),
     ],
 
-    'live_tests' => (bool) env('BPS_LIVE_TESTS', false),
+    'live_tests' => filter_var(env('BPS_LIVE_TESTS', false), FILTER_VALIDATE_BOOLEAN),
 ];
