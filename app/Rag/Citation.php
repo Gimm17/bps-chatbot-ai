@@ -55,19 +55,25 @@ final class Citation
      *
      * @param  array<string, \App\Bps\BpsCitation>  $sources
      * @param  list<string>  $sourceIds
-     * @return list<self>
+     * @return list<Citation>
      */
     public static function fromBpsSources(array $sources, array $sourceIds): array
     {
         $out = [];
         $seen = [];
         foreach ($sourceIds as $id) {
+            if (! is_string($id)) {
+                continue;
+            }
             $id = trim($id);
             if ($id === '' || isset($seen[$id]) || ! isset($sources[$id])) {
                 continue;
             }
             $seen[$id] = true;
             $s = $sources[$id];
+            if (! $s instanceof \App\Bps\BpsCitation) {
+                continue;
+            }
             $out[] = new self(
                 sourceId: $s->sourceId,
                 title: $s->title,

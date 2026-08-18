@@ -21,6 +21,8 @@ class BpsCitationTest extends TestCase
         $this->assertSame('954', $citations[0]->sourceId);
         $this->assertTrue($citations[0]->verified);
         $this->assertSame('https://jabar.bps.go.id', $citations[0]->url);
+        $this->assertSame('Inflasi (IHK)', $citations[0]->title);
+        $this->assertSame('Inflasi Jawa Barat 2023: 2.8%', $citations[0]->snippet);
     }
 
     public function test_from_bps_sources_dedupes(): void

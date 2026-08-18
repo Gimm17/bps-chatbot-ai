@@ -15,6 +15,8 @@ final class BpsCitation
         public readonly ?string $snippet,
         public readonly ?string $domain = null,
         public readonly ?string $period = null,
+        // Selalu true untuk sumber BPS resmi; properti ada untuk dokumentasi identitas
+        // dan ruang bila tipe sumber lain (non-BPS) ditambahkan nanti.
         public readonly bool $verified = true,
     ) {}
 }
