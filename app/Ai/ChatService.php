@@ -2,6 +2,7 @@
 
 namespace App\Ai;
 
+use App\Bps\BpsAgent;
 use App\Rag\Citation;
 use App\Rag\RetrieverInterface;
 use App\Security\RequestId;
@@ -19,6 +20,7 @@ final class ChatService
         private readonly RetrieverInterface $retriever,
         private readonly ScopeGuard $scopeGuard,
         private readonly PromptBuilder $promptBuilder,
+        private readonly ?BpsAgent $bpsAgent = null,
     ) {}
 
     public function handle(string $message): ChatResponse
@@ -41,7 +43,26 @@ final class ChatService
             );
         }
 
-        // 3. Retrieve evidence.
+        // 3. BPS WebAPI path (feature-flagged). Intent tanpa tool tetap fallback .md.
+        if ($this->shouldUseBpsAgent()) {
+            $result = $this->bpsAgent?->run($message, $scope->intent);
+            if ($result !== null) {
+                $citations = Citation::fromBpsSources(
+                    $this->bpsAgent->collectedSources(),
+                    $result->citationSourceIds,
+                );
+
+                return new ChatResponse(
+                    $requestId,
+                    $result->status,
+                    answer: $result->answer,
+                    clarificationQuestion: $result->clarificationQuestion,
+                    citations: $citations,
+                );
+            }
+        }
+
+        // 4. Retrieve evidence fallback.
         $evidence = $this->retriever->retrieve($message, topK: 4);
 
         // 4. No-evidence bila retrieval kosong (jangan mengarang).
@@ -88,6 +109,13 @@ final class ChatService
             clarificationQuestion: $result->clarificationQuestion,
             citations: $citations,
         );
+    }
+
+    private function shouldUseBpsAgent(): bool
+    {
+        return $this->bpsAgent !== null
+            && (bool) config('bps.enabled', false)
+            && (string) config('bps.key', '') !== '';
     }
 
     private function outOfScopeAnswer(): string
