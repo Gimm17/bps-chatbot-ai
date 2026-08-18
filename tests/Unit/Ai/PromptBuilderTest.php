@@ -17,6 +17,7 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('citationSourceIds', $prompt);
         $this->assertStringContainsString('no_evidence', $prompt);
         $this->assertStringContainsString('Jangan jawab angka dari memori', $prompt);
+        $this->assertStringContainsString('Jangan menebak ID', $prompt);
     }
 
     public function test_bps_path_has_no_demo_evidence_block(): void

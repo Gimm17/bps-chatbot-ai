@@ -6,9 +6,9 @@ use App\Bps\BpsApiClient;
 use App\Bps\BpsToolRegistry;
 use App\Bps\Tools\DataeximTool;
 use App\Bps\Tools\GetDynamicDataTool;
-use App\Bps\Tools\GetGlosariumTool;
 use App\Bps\Tools\GetPublicationTool;
 use App\Bps\Tools\ListIndicatorsTool;
+use App\Bps\Tools\ListPeriodsTool;
 use App\Bps\Tools\ListPublicationsTool;
 use App\Bps\Tools\SensusDataTool;
 use Tests\TestCase;
@@ -20,11 +20,9 @@ class BpsToolRegistryTest extends TestCase
         return new BpsToolRegistry($this->app->make(BpsApiClient::class));
     }
 
-    public function test_definition_returns_glosarium_only(): void
+    public function test_definition_returns_empty_while_live_glosarium_is_unavailable(): void
     {
-        $tools = $this->registry()->forIntent('definition');
-        $this->assertCount(1, $tools);
-        $this->assertInstanceOf(GetGlosariumTool::class, $tools[0]);
+        $this->assertSame([], $this->registry()->forIntent('definition'));
     }
 
     public function test_numeric_statistic_includes_core_data_tools(): void
@@ -32,6 +30,7 @@ class BpsToolRegistryTest extends TestCase
         $classes = array_map(fn ($t) => $t::class, $this->registry()->forIntent('numeric_statistic'));
         $this->assertContains(GetDynamicDataTool::class, $classes);
         $this->assertContains(ListIndicatorsTool::class, $classes);
+        $this->assertContains(ListPeriodsTool::class, $classes);
         $this->assertContains(DataeximTool::class, $classes);
         $this->assertContains(SensusDataTool::class, $classes);
     }

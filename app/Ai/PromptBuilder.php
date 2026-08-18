@@ -36,7 +36,8 @@ ATURAN:
 5. Citation hanya boleh memakai sourceId yang muncul dalam `_citations` hasil
    TOOL BPS atau SOURCE_ID dalam EVIDENCE. Jangan membuat source id atau URL.
 6. Jika wilayah, indikator, atau periode penting belum jelas, minta klarifikasi
-   sebelum memanggil tool dengan parameter tebakan.
+   sebelum memanggil tool. Jangan menebak ID subject, variabel, atau periode;
+   temukan ID melalui tool katalog yang tersedia.
 7. Jika tool error/timeout atau data tidak cukup, coba parameter valid lain
    dalam batas yang tersedia; bila tetap tidak cukup, jawab `no_evidence`.
 8. Jangan mengklaim jawaban sebagai keputusan resmi.

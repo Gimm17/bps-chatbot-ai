@@ -113,6 +113,12 @@ class BpsAgentTest extends TestCase
         $this->assertSame([], $agent->collectedSources());
     }
 
+    public function test_execution_time_limit_covers_tool_steps_and_final_synthesis(): void
+    {
+        $this->assertSame(365, BpsAgent::executionTimeLimit(4, 60));
+        $this->assertSame(25, BpsAgent::executionTimeLimit(0, 10));
+    }
+
     public function test_provider_failure_returns_no_evidence_without_leaking_error(): void
     {
         $provider = Mockery::mock(AiProviderInterface::class);

@@ -4,13 +4,13 @@ namespace App\Bps;
 
 use App\Bps\Tools\DataeximTool;
 use App\Bps\Tools\GetDynamicDataTool;
-use App\Bps\Tools\GetGlosariumTool;
 use App\Bps\Tools\GetPressreleaseTool;
 use App\Bps\Tools\GetPublicationTool;
 use App\Bps\Tools\GetStatictableTool;
 use App\Bps\Tools\ListDomainsTool;
 use App\Bps\Tools\ListIndicatorsTool;
 use App\Bps\Tools\ListInfographicsTool;
+use App\Bps\Tools\ListPeriodsTool;
 use App\Bps\Tools\ListPressreleasesTool;
 use App\Bps\Tools\ListPublicationsTool;
 use App\Bps\Tools\ListSdgsTool;
@@ -49,10 +49,11 @@ final class BpsToolRegistry
     private function mapping(): array
     {
         return [
-            'definition' => [GetGlosariumTool::class],
+            'definition' => [],
             'numeric_statistic' => [
-                ListDomainsTool::class, ListVarsTool::class, ListIndicatorsTool::class,
-                GetDynamicDataTool::class, DataeximTool::class, ListSdgsTool::class,
+                ListDomainsTool::class, ListVarsTool::class, ListPeriodsTool::class,
+                ListIndicatorsTool::class, GetDynamicDataTool::class,
+                DataeximTool::class, ListSdgsTool::class,
                 SensusListEventsTool::class, SensusDataTool::class,
                 SimdasiTablesTool::class, SimdasiDetailTool::class,
             ],
@@ -61,7 +62,7 @@ final class BpsToolRegistry
                 ListPressreleasesTool::class, GetPressreleaseTool::class,
             ],
             'metadata_methodology' => [
-                GetGlosariumTool::class, ListStatictablesTool::class, GetStatictableTool::class,
+                ListStatictablesTool::class, GetStatictableTool::class,
                 ListUnitsTool::class, ListVarsTool::class,
             ],
             'navigation' => [

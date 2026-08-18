@@ -73,6 +73,21 @@ final class LimitRouterProvider implements AiProviderInterface
         );
         $text = trim((string) $response->text);
 
+        if ($text === '') {
+            $synthesisAgent = new ToolCappedAgent(
+                instructions: $input->instructions ?? '',
+                messages: [...$input->messages, ...$response->messages],
+                tools: [],
+                stepLimit: 1,
+            );
+            $text = trim((string) $synthesisAgent->prompt(
+                '',
+                provider: 'limitrouter',
+                model: $model,
+                timeout: $timeout,
+            )->text);
+        }
+
         return new ChatProviderOutput(
             text: $text !== '' ? $text : '{"status":"no_evidence","answer":null,"clarificationQuestion":null,"citationSourceIds":[]}',
             model: $model,

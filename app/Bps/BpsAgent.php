@@ -25,6 +25,9 @@ final class BpsAgent
 
     public function run(string $question, string $intent): ?ChatResult
     {
+        // Web SAPIs commonly default to 30s; allow every bounded model step plus synthesis.
+        @set_time_limit(self::executionTimeLimit($this->maxToolCalls, $this->timeoutSec));
+
         $this->collectedSources = [];
 
         $tools = $this->registry->forIntent($intent);
@@ -53,6 +56,11 @@ final class BpsAgent
         }
 
         return ChatResult::parse($output->text);
+    }
+
+    public static function executionTimeLimit(int $maxToolCalls, int $timeoutSec): int
+    {
+        return (max(0, $maxToolCalls) + 2) * max(1, $timeoutSec) + 5;
     }
 
     /** @return array<string, BpsCitation> */

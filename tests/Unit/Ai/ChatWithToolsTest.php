@@ -57,10 +57,31 @@ class ChatWithToolsTest extends TestCase
         $this->assertStringContainsString('no_evidence', $output->text);
     }
 
+    public function test_empty_final_tool_step_gets_one_synthesis_call_without_more_tool_execution(): void
+    {
+        ToolCappedAgent::fake([
+            new ToolCall('call-1', 'lookup', []),
+            new ToolCall('call-2', 'lookup', []),
+            new ToolCall('call-3', 'lookup', []),
+            '{"status":"answered","answer":"final","citationSourceIds":[]}',
+        ])->preventStrayPrompts();
+        $tool = new RecordingTool('lookup');
+
+        $output = $this->app->make(LimitRouterProvider::class)->chatWithTools(
+            new ChatProviderInput(messages: [new Message(MessageRole::User, 'x')]),
+            [$tool],
+            maxToolCalls: 2,
+        );
+
+        $this->assertSame(2, $tool->calls);
+        $this->assertStringContainsString('answered', $output->text);
+    }
+
     public function test_zero_cap_never_executes_a_tool(): void
     {
         ToolCappedAgent::fake([
             new ToolCall('call-1', 'lookup', []),
+            '{"status":"no_evidence","answer":null,"citationSourceIds":[]}',
         ])->preventStrayPrompts();
         $tool = new RecordingTool('lookup');
 
