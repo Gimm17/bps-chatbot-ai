@@ -4,12 +4,12 @@ namespace Tests\Unit\Bps;
 
 use App\Bps\BpsApiClient;
 use App\Bps\BpsToolRegistry;
+use App\Bps\Tools\DataeximTool;
 use App\Bps\Tools\GetDynamicDataTool;
 use App\Bps\Tools\GetGlosariumTool;
 use App\Bps\Tools\GetPublicationTool;
 use App\Bps\Tools\ListIndicatorsTool;
 use App\Bps\Tools\ListPublicationsTool;
-use App\Bps\Tools\DataeximTool;
 use App\Bps\Tools\SensusDataTool;
 use Tests\TestCase;
 
