@@ -53,7 +53,7 @@ final class BpsResponse
         return new self(
             isOk: (bool) ($a['isOk'] ?? false),
             rows: (array) ($a['rows'] ?? []),
-            pages: (int) ($a['pages'] ?? 0),
+            pages: (int) ($a['pages'] ?? 1),
             total: (int) ($a['total'] ?? 0),
             errorMessage: $a['errorMessage'] ?? null,
             httpStatus: (int) ($a['httpStatus'] ?? 200),

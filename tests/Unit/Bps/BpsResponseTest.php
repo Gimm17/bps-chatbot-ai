@@ -59,4 +59,22 @@ class BpsResponseTest extends TestCase
         $this->assertTrue($restored->isOk);
         $this->assertSame('x', $restored->rows[0]['id']);
     }
+
+    public function test_parse_error_uses_message2_fallback(): void
+    {
+        $resp = BpsResponse::parse(['status' => 'Error', 'message2' => 'Fallback detail'], 200);
+
+        $this->assertFalse($resp->isOk);
+        $this->assertSame('Fallback detail', $resp->errorMessage);
+    }
+
+    public function test_error_path_roundtrip_preserves_error_message(): void
+    {
+        $resp = BpsResponse::parse(['status' => 'Error', 'message' => 'Boom'], 200);
+
+        $restored = BpsResponse::fromCached($resp->toJson());
+
+        $this->assertFalse($restored->isOk);
+        $this->assertSame('Boom', $restored->errorMessage);
+    }
 }
