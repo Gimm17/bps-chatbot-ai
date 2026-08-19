@@ -69,7 +69,12 @@ final class ChatService
 
         // 3. BPS WebAPI path (feature-flagged). Intent tanpa tool tetap fallback .md.
         if ($this->shouldUseBpsAgent()) {
-            $result = $this->bpsAgent?->run($message, $scope->intent, $history);
+            // Untuk follow-up singkat ("tahun 2023") yang melengkapi clarification
+            // numerik, bangun satu pertanyaan efektif yang menggabungkan history
+            // agar agent melihat konteks tanpa membawa topik/jawaban bubble lain
+            // (mencegah context bleed). Pertanyaan mandiri tidak digabung.
+            $question = $this->effectiveQuestion($message, $history, $scope);
+            $result = $this->bpsAgent?->run($question, $scope->intent);
             if ($result !== null) {
                 $citations = Citation::fromBpsSources(
                     $this->bpsAgent->collectedSources(),
@@ -184,6 +189,29 @@ final class ChatService
     private function historyKey(string $conversationId): string
     {
         return 'bpsconv:'.sha1($conversationId);
+    }
+
+    /**
+     * Bangun pertanyaan efektif untuk agent. Hanya gabungkan history bila pesan
+     * sekarang adalah follow-up singkat untuk numeric_statistic (mis. "tahun 2023"
+     * atau "jumlah penduduk" setelah clarification); jika history sudah memuat
+     * konteks wilayah, hasilnya adalah satu pertanyaan lengkap, bukan daftar turn.
+     * Ini mencegah context bleed — agent tidak lagi melihat bubble inflasi
+     * sebelumnya sebagai user-turn terpisah yang harus dilengkapi.
+     */
+    private function effectiveQuestion(string $message, array $history, \App\Ai\ScopeDecision $scope): string
+    {
+        if ($history === [] || $scope->intent !== 'numeric_statistic') {
+            return $message;
+        }
+        $trimmed = trim($message);
+        $isShortFollowup = mb_strlen($trimmed) <= 40 || preg_match('/^(tahun|periode|jumlah|berapa|terbaru|terkini)\b/i', $trimmed);
+        if (! $isShortFollowup) {
+            return $message;
+        }
+        $previous = end($history) ?: '';
+
+        return $previous !== '' ? "{$previous} {$trimmed}" : $message;
     }
 
     private function shouldUseBpsAgent(): bool
