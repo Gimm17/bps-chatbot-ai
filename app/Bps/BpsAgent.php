@@ -46,14 +46,15 @@ final class BpsAgent
             $tools,
         );
 
-        // Konteks multi-turn: sertakan pesan user sebelumnya agar model mengingat
-        // wilayah/periode yang sudah dibahas di bubble sebelumnya. Hanya pesan user
-        // (bukan jawaban bot) agar context tetap ringkas dan tidak mengacaukan cap.
-        $messages = [];
-        foreach (array_slice(array_values($history), -5) as $prev) {
-            $messages[] = new Message(MessageRole::User, $prev);
-        }
-        $messages[] = new Message(MessageRole::User, $question);
+        // Konteks multi-turn: history harus masuk sebagai satu user message berisi
+        // rangkuman follow-up, BUKAN sebagai N user-turn berurutan — OpenAI
+        // tool-loop menganggap user-turn berurutan sebagai konteks sekarang, sehingga
+        // model melengkapi jawaban bubble sebelumnya (context bleed). Untuk follow-up
+        // singkat ("tahun 2023"), history sudah digabung sebagai pertanyaan efektif
+        // oleh ChatService; history utuh tidak dipakai di sini agar tidak mengacaukan
+        // fokus model.
+        unset($history);
+        $messages = [new Message(MessageRole::User, $question)];
 
         $input = new ChatProviderInput(
             messages: $messages,
