@@ -160,10 +160,11 @@ final class ChatService
         }
         $history = Cache::get($this->historyKey($conversationId), []);
         if (! is_array($history)) {
-            return [];
+            $history = [];
         }
-        // Hanya ambil pesan user untuk classification; dipotong di remember.
-        return array_values(array_filter($history, 'is_string'));
+        $history = array_values(array_filter($history, 'is_string'));
+
+        return $history;
     }
 
     /** Simpan turn (pesan user) ke history sesi; dipotong ke HISTORY_MAX_TURNS. */

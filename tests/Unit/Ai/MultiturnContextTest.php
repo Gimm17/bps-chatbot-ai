@@ -32,6 +32,18 @@ class MultiturnContextTest extends TestCase
         $this->assertNotContains('period', $withHistory->missing);
     }
 
+    public function test_province_match_tolerant_to_trailing_punctuation(): void
+    {
+        // Regression: nama provinsi di akhir pesan sering diikuti tanda baca
+        // ("sulawesi tengah?", "sulawesi tengah,") sehingga match
+        // spasi-presisi gagal. Word-boundary match harus toleran.
+        $guard = new ScopeGuard(useLlmLayer: false);
+
+        $this->assertNotContains('geography', $guard->classify('berapa penduduk Sulawesi Tengah?')->missing);
+        $this->assertNotContains('geography', $guard->classify('jumlah penduduk Sulawesi Tengah,')->missing);
+        $this->assertNotContains('geography', $guard->classify('Sulawesi Tengah tahun 2023')->missing);
+    }
+
     public function test_classify_with_history_combines_province_and_year(): void
     {
         $guard = new ScopeGuard(useLlmLayer: false);

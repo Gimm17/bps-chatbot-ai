@@ -212,7 +212,9 @@ final class ScopeGuard
         }
 
         foreach (self::PROVINCE_PATTERNS as $prov) {
-            if (str_contains(' '.$q.' ', ' '.$prov.' ')) {
+            // Word-boundary match: toleran terhadap tanda baca di akhir
+            // (mis. "sulawesi tengah?" / "sulawesi tengah,"), bukan spasi-presisi.
+            if (preg_match('/(?:^|\W)'.preg_quote($prov, '\/').'(?:\W|$)/', $q)) {
                 return true;
             }
         }
