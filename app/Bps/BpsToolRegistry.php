@@ -61,6 +61,11 @@ final class BpsToolRegistry
                 DataeximTool::class, ListSdgsTool::class,
                 SensusListEventsTool::class, SensusDataTool::class,
                 SimdasiTablesTool::class, SimdasiDetailTool::class,
+                // Fallback sumber verified: angka BPS tidak selalu ada di dynamic
+                // data (mis. proyeksi penduduk tahun tertentu hanya ada di
+                // publikasi/tabel statis). Sediakan jalur publikasi & tabel statis.
+                ListPublicationsTool::class, GetPublicationTool::class,
+                ListStatictablesTool::class, GetStatictableTool::class,
             ],
             'publication' => [
                 ListPublicationsTool::class, GetPublicationTool::class,
