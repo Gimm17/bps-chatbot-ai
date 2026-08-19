@@ -23,7 +23,11 @@ final class BpsAgent
         private readonly int $timeoutSec,
     ) {}
 
-    public function run(string $question, string $intent): ?ChatResult
+    /**
+     * @param  list<string>  $history  pesan user sebelumnya dalam sesi (untuk
+     *   context multi-turn; tidak mengubah cap tool/step agar tidak bloat).
+     */
+    public function run(string $question, string $intent, array $history = []): ?ChatResult
     {
         // Web SAPIs commonly default to 30s; allow every bounded model step plus synthesis.
         @set_time_limit(self::executionTimeLimit($this->maxToolCalls, $this->timeoutSec));
@@ -41,8 +45,18 @@ final class BpsAgent
             fn ($tool) => new CitationCollectingTool($tool, $collect),
             $tools,
         );
+
+        // Konteks multi-turn: sertakan pesan user sebelumnya agar model mengingat
+        // wilayah/periode yang sudah dibahas di bubble sebelumnya. Hanya pesan user
+        // (bukan jawaban bot) agar context tetap ringkas dan tidak mengacaukan cap.
+        $messages = [];
+        foreach (array_slice(array_values($history), -5) as $prev) {
+            $messages[] = new Message(MessageRole::User, $prev);
+        }
+        $messages[] = new Message(MessageRole::User, $question);
+
         $input = new ChatProviderInput(
-            messages: [new Message(MessageRole::User, $question)],
+            messages: $messages,
             instructions: $this->promptBuilder->buildInstructions($question, []),
             timeout: $this->timeoutSec,
         );

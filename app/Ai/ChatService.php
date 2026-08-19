@@ -6,6 +6,9 @@ use App\Bps\BpsAgent;
 use App\Rag\Citation;
 use App\Rag\RetrieverInterface;
 use App\Security\RequestId;
+use Illuminate\Support\Facades\Cache;
+use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\MessageRole;
 
 /**
  * Orkestrasi flow /api/chat per DOCS/03_API/02_INTERNAL_API_CONTRACT.md +
@@ -23,12 +26,21 @@ final class ChatService
         private readonly ?BpsAgent $bpsAgent = null,
     ) {}
 
-    public function handle(string $message): ChatResponse
+    /** Batasi history ke N turn terakhir agar context tidak bloat. */
+    private const HISTORY_MAX_TURNS = 6;
+
+    public function handle(string $message, string $conversationId = ''): ChatResponse
     {
         $requestId = RequestId::generate();
 
-        // 1. Scope/intent guard.
-        $scope = $this->scopeGuard->classify($message);
+        // 0. Ambil history turn sebelumnya (server-side, per conversationId).
+        $history = $this->historyFor($conversationId);
+
+        // 1. Scope/intent guard. Pakai history untuk melanjutkan clarification
+        //    tanpa menanyakan ulang parameter yang sudah disebut bubble sebelumnya.
+        $scope = $history !== []
+            ? $this->scopeGuard->classifyWithHistory($message, $history)
+            : $this->scopeGuard->classify($message);
 
         if (! $scope->inScope) {
             return new ChatResponse($requestId, 'out_of_scope', answer: $this->outOfScopeAnswer());
@@ -36,34 +48,44 @@ final class ChatService
 
         // 1b. Sapaan murni -> balas ramah tanpa provider/retriever (cepat, hemat quota).
         if ($scope->intent === 'greeting') {
-            return new ChatResponse($requestId, 'answered', answer: $this->greetingAnswer());
+            $resp = new ChatResponse($requestId, 'answered', answer: $this->greetingAnswer());
+            $this->remember($conversationId, $message, (string) $resp->answer);
+
+            return $resp;
         }
 
         // 2. Clarification bila parameter numerik kurang.
         if ($scope->intent === 'numeric_statistic' && $scope->missing !== []) {
-            return new ChatResponse(
+            $resp = new ChatResponse(
                 $requestId,
                 'clarification_required',
                 clarificationQuestion: $this->clarificationQuestion($scope->missing),
             );
+            // Simpan turn ini agar bubble jawaban user melengkapi (tidak tanya ulang).
+            $this->remember($conversationId, $message, (string) ($resp->clarificationQuestion ?? ''));
+
+            return $resp;
         }
 
         // 3. BPS WebAPI path (feature-flagged). Intent tanpa tool tetap fallback .md.
         if ($this->shouldUseBpsAgent()) {
-            $result = $this->bpsAgent?->run($message, $scope->intent);
+            $result = $this->bpsAgent?->run($message, $scope->intent, $history);
             if ($result !== null) {
                 $citations = Citation::fromBpsSources(
                     $this->bpsAgent->collectedSources(),
                     $result->citationSourceIds,
                 );
 
-                return new ChatResponse(
+                $resp = new ChatResponse(
                     $requestId,
                     $result->status,
                     answer: $result->answer,
                     clarificationQuestion: $result->clarificationQuestion,
                     citations: $citations,
                 );
+                $this->remember($conversationId, $message, (string) ($resp->answer ?? $resp->clarificationQuestion ?? ''));
+
+                return $resp;
             }
         }
 
@@ -72,14 +94,17 @@ final class ChatService
 
         // 4. No-evidence bila retrieval kosong (jangan mengarang).
         if ($evidence === []) {
-            return new ChatResponse(
+            $resp = new ChatResponse(
                 $requestId,
                 'no_evidence',
                 answer: 'Saya belum menemukan sumber BPS yang cukup untuk memastikan jawaban tersebut.',
             );
+            $this->remember($conversationId, $message, (string) $resp->answer);
+
+            return $resp;
         }
 
-        // 5. Build prompt + call provider.
+        // 5. Build prompt + call provider. Sertakan history sebagai context turn sebelumnya.
         $instructions = $this->promptBuilder->buildInstructions($message, $evidence);
         $messages = $this->promptBuilder->buildMessages($message);
         try {
@@ -94,11 +119,14 @@ final class ChatService
                 'error' => $e::class,
             ]);
 
-            return new ChatResponse(
+            $resp = new ChatResponse(
                 $requestId,
                 'provider_error',
                 answer: 'Layanan AI sedang tidak tersedia. Silakan coba kembali beberapa saat lagi.',
             );
+            $this->remember($conversationId, $message, (string) $resp->answer);
+
+            return $resp;
         }
 
         // 6. Parse + validate response.
@@ -107,13 +135,55 @@ final class ChatService
         // 7. Map citation dari trusted registry (bukan URL output LLM).
         $citations = Citation::fromSources($evidence, $result->citationSourceIds);
 
-        return new ChatResponse(
+        $resp = new ChatResponse(
             $requestId,
             $result->status,
             answer: $result->answer,
             clarificationQuestion: $result->clarificationQuestion,
             citations: $citations,
         );
+        $this->remember($conversationId, $message, (string) ($resp->answer ?? $resp->clarificationQuestion ?? ''));
+
+        return $resp;
+    }
+
+    /**
+     * Ambil daftar pesan user sebelumnya dalam sesi ini (terbaru terakhir).
+     * Server-side store per conversationId; tidak bergantung pada frontend.
+     *
+     * @return list<string>
+     */
+    private function historyFor(string $conversationId): array
+    {
+        if ($conversationId === '') {
+            return [];
+        }
+        $history = Cache::get($this->historyKey($conversationId), []);
+        if (! is_array($history)) {
+            $history = [];
+        }
+        $history = array_values(array_filter($history, 'is_string'));
+
+        return $history;
+    }
+
+    /** Simpan turn (pesan user) ke history sesi; dipotong ke HISTORY_MAX_TURNS. */
+    private function remember(string $conversationId, string $message, string $answer): void
+    {
+        if ($conversationId === '') {
+            return;
+        }
+        $history = $this->historyFor($conversationId);
+        $history[] = $message;
+        // Simpan hanya pesan user untuk classification; jawaban bot tidak dipakai
+        // sebagai parameter geography/period (menghindari false positive).
+        $history = array_slice($history, -self::HISTORY_MAX_TURNS);
+        Cache::put($this->historyKey($conversationId), $history, now()->addHours(24));
+    }
+
+    private function historyKey(string $conversationId): string
+    {
+        return 'bpsconv:'.sha1($conversationId);
     }
 
     private function shouldUseBpsAgent(): bool

@@ -106,6 +106,48 @@ final class ScopeGuard
         return $this->finalize('definition', $q);
     }
 
+    /**
+     * Classify dengan konteks multi-turn: intent diambil dari pesan sekarang,
+     * tetapi deteksi geography/period digabung dari pesan sekarang + history.
+     * Dipakai untuk melanjutkan clarification tanpa menanyakan ulang parameter
+     * yang sudah disebut di bubble sebelumnya.
+     *
+     * @param  list<string>  $history  pesan-pesan sebelumnya dalam sesi (terbaru terakhir)
+     */
+    public function classifyWithHistory(string $question, array $history): ScopeDecision
+    {
+        $q = mb_strtolower(trim($question));
+        $decision = $this->classify($question);
+
+        $combined = $q.' '.mb_strtolower(implode(' ', array_map('strval', $history)));
+
+        // Warisi intent numeric_statistic bila pesan sekarang ambigu (mis. jawaban
+        // singkat "tahun 2023" / "jumlah penduduk") tetapi gabungan dengan history
+        // membentuk query numeric lengkap (indikator + wilayah/periode).
+        $intent = $decision->intent;
+        if ($intent !== 'numeric_statistic'
+            && preg_match('/(berapa|jumlah|angka|nilai|tingkat|persentase|rasio)\b/', $combined)
+        ) {
+            $intent = 'numeric_statistic';
+        }
+
+        // Hanya gabung parameter untuk numeric_statistic; intent lain tidak
+        // bergantung pada geography/period.
+        if ($intent !== 'numeric_statistic') {
+            return $decision;
+        }
+
+        $missing = [];
+        if (! $this->hasGeography($combined)) {
+            $missing[] = 'geography';
+        }
+        if (! $this->hasPeriod($combined)) {
+            $missing[] = 'period';
+        }
+
+        return ScopeDecision::inScope('numeric_statistic', $missing);
+    }
+
     private function heuristicIntent(string $q): ?string
     {
         $hasScope = false;
@@ -170,7 +212,9 @@ final class ScopeGuard
         }
 
         foreach (self::PROVINCE_PATTERNS as $prov) {
-            if (str_contains(' '.$q.' ', ' '.$prov.' ')) {
+            // Word-boundary match: toleran terhadap tanda baca di akhir
+            // (mis. "sulawesi tengah?" / "sulawesi tengah,"), bukan spasi-presisi.
+            if (preg_match('/(?:^|\W)'.preg_quote($prov, '\/').'(?:\W|$)/', $q)) {
                 return true;
             }
         }
