@@ -32,6 +32,41 @@ final class ScopeGuard
         'gaya rambut', 'skincare', 'rekomendasi beli', 'beli', 'harga hp',
     ];
 
+    /**
+     * Pola sapaan. Dicocokkan SEBELUM out-of-scope check karena sapaan murni
+     * (tanpa topik lain) tidak boleh ditolak. Short-circuit ke intent `greeting`.
+     * Diutamakan word-boundary agar "halo" tidak false-positive di tengah kata.
+     */
+    private const GREETING_PATTERNS = [
+        '/^(\s)*(halo|hallo|hai|hi|hello|hey|assalamualaiku?m+|salam)\b/i',
+        '/^(\s)*(selamat|met)\s+(pagi|siang|sore|malam|malam hari)\b/i',
+        '/^(\s)*(apa|bagaimana)\s+kabar\b/i',
+    ];
+
+    /**
+     * Nama 38 provinsi Indonesia (termasuk DOB 2022-2024) lowercase.
+     * Dipakai mendeteksi geography pada numeric_statistic bila kata generik
+     * (provinsi/kabupaten/kota) tidak muncul tetapi nama wilayah konkret ada.
+     */
+    private const PROVINCE_PATTERNS = [
+        'aceh', 'sumatera utara', 'sumatera barat', 'riau', 'jambi',
+        'sumatera selatan', 'bengkulu', 'lampung', 'kepulauan bangka belitung',
+        'kepulauan riau', 'dki jakarta', 'jakarta', 'jawa barat', 'jawa tengah',
+        'di yogyakarta', 'yogyakarta', 'jawa timur', 'banten', 'bali',
+        'nusa tenggara barat', 'nusa tenggara timur', 'kalimantan barat',
+        'kalimantan tengah', 'kalimantan selatan', 'kalimantan timur',
+        'kalimantan utara', 'sulawesi utara', 'gorontalo', 'sulawesi tengah',
+        'sulawesi selatan', 'sulawesi tenggara', 'sulawesi barat', 'maluku',
+        'maluku utara', 'papua', 'papua barat', 'papua selatan', 'papua tengah',
+        'papua pegunungan', 'papua barat daya',
+    ];
+
+    /** Penanda periode "terbaru" — dianggap period sudah cukup (latest). */
+    private const LATEST_PERIOD_KEYWORDS = [
+        'terbaru', 'terkini', 'terakhir', 'latest', 'sekarang', 'tahun ini',
+        'kini', 'saat ini', 'paling baru', 'paling akhir',
+    ];
+
     public function __construct(
         private readonly bool $useLlmLayer = true,
     ) {}
@@ -39,6 +74,11 @@ final class ScopeGuard
     public function classify(string $question): ScopeDecision
     {
         $q = mb_strtolower(trim($question));
+
+        // Layer 0: sapaan murni -> balas ramah, jangan sampai ke LLM/out-of-scope.
+        if ($this->isGreeting($q)) {
+            return ScopeDecision::inScope('greeting', []);
+        }
 
         // Layer 1a: out-of-scope kuat -> langsung tolak tanpa LLM.
         foreach (self::OUTSCOPE_KEYWORDS as $kw) {
@@ -108,15 +148,75 @@ final class ScopeGuard
     {
         $missing = [];
         if ($intent === 'numeric_statistic') {
-            if (! preg_match('/(provinsi|kabupaten|kota|indonesia|desa|kecamatan|wilayah|daerah)\b/', $q)) {
+            if (! $this->hasGeography($q)) {
                 $missing[] = 'geography';
             }
-            if (! preg_match('/(tahun|periode|triwulan|bulanan|bulan [0-9]|[0-9]{4})\b/', $q)) {
+            if (! $this->hasPeriod($q)) {
                 $missing[] = 'period';
             }
         }
 
         return ScopeDecision::inScope($intent, $missing);
+    }
+
+    /**
+     * Geography hadir bila ada kata generik wilayah ATAU nama provinsi konkret
+     * ATAU konteks nasional. "di sini"/placeholder tidak dianggap geography.
+     */
+    private function hasGeography(string $q): bool
+    {
+        if (preg_match('/(provinsi|kabupaten|kota|indonesia|nasional|desa|kecamatan|kepulauan|wilayah|daerah)\b/', $q)) {
+            return true;
+        }
+
+        foreach (self::PROVINCE_PATTERNS as $prov) {
+            if (str_contains(' '.$q.' ', ' '.$prov.' ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Period hadir bila ada tahun/periode/triwulan/bulan ATAU kata kunci
+     * "terbaru/terkini/sekarang" yang menyatakan latest period.
+     */
+    private function hasPeriod(string $q): bool
+    {
+        if (preg_match('/(tahun|periode|perioda|triwulan|bulanan|semester|bulan [0-9]|[0-9]{4})\b/', $q)) {
+            return true;
+        }
+
+        foreach (self::LATEST_PERIOD_KEYWORDS as $kw) {
+            if (str_contains($q, $kw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Apakah pesan murni sapaan? Cocok pola greeting dan tidak mengandung
+     * kata in-scope (agar "halo, tanya inflasi" tetap diproses normal).
+     */
+    private function isGreeting(string $q): bool
+    {
+        // Jika ada kata in-scope kuat, bukan sapaan murni -> proses normal.
+        foreach (self::INSCOPE_KEYWORDS as $kw) {
+            if (str_contains($q, $kw)) {
+                return false;
+            }
+        }
+
+        foreach (self::GREETING_PATTERNS as $pattern) {
+            if (preg_match($pattern, $q)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function llmClassify(string $question): ?ScopeDecision

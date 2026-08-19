@@ -49,7 +49,12 @@ final class BpsToolRegistry
     private function mapping(): array
     {
         return [
-            'definition' => [],
+            // Definisi/konsep istilah BPS: cari variabel, indikator, tabel statis,
+            // atau publikasi terkait istilah agar jawaban bersumber BPS (verified).
+            'definition' => [
+                ListVarsTool::class, ListIndicatorsTool::class,
+                ListStatictablesTool::class, ListPublicationsTool::class,
+            ],
             'numeric_statistic' => [
                 ListDomainsTool::class, ListVarsTool::class, ListPeriodsTool::class,
                 ListIndicatorsTool::class, GetDynamicDataTool::class,

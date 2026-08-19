@@ -10,6 +10,8 @@ use App\Bps\Tools\GetPublicationTool;
 use App\Bps\Tools\ListIndicatorsTool;
 use App\Bps\Tools\ListPeriodsTool;
 use App\Bps\Tools\ListPublicationsTool;
+use App\Bps\Tools\ListStatictablesTool;
+use App\Bps\Tools\ListVarsTool;
 use App\Bps\Tools\SensusDataTool;
 use Tests\TestCase;
 
@@ -20,9 +22,17 @@ class BpsToolRegistryTest extends TestCase
         return new BpsToolRegistry($this->app->make(BpsApiClient::class));
     }
 
-    public function test_definition_returns_empty_while_live_glosarium_is_unavailable(): void
+    public function test_definition_returns_catalog_tools_so_answers_are_bps_sourced(): void
     {
-        $this->assertSame([], $this->registry()->forIntent('definition'));
+        // Definisi/konsep istilah BPS dicari via katalog variabel, indikator,
+        // tabel statis, dan publikasi agar jawaban bersumber BPS (verified),
+        // bukan fallback .md demo. Endpoint glosarium live memang unavailable,
+        // tetapi istilah dapat dijelaskan dari sumber BPS lain.
+        $classes = array_map(fn ($t) => $t::class, $this->registry()->forIntent('definition'));
+        $this->assertContains(ListVarsTool::class, $classes);
+        $this->assertContains(ListIndicatorsTool::class, $classes);
+        $this->assertContains(ListStatictablesTool::class, $classes);
+        $this->assertContains(ListPublicationsTool::class, $classes);
     }
 
     public function test_numeric_statistic_includes_core_data_tools(): void

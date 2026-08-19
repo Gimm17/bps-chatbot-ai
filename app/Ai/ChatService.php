@@ -34,6 +34,11 @@ final class ChatService
             return new ChatResponse($requestId, 'out_of_scope', answer: $this->outOfScopeAnswer());
         }
 
+        // 1b. Sapaan murni -> balas ramah tanpa provider/retriever (cepat, hemat quota).
+        if ($scope->intent === 'greeting') {
+            return new ChatResponse($requestId, 'answered', answer: $this->greetingAnswer());
+        }
+
         // 2. Clarification bila parameter numerik kurang.
         if ($scope->intent === 'numeric_statistic' && $scope->missing !== []) {
             return new ChatResponse(
@@ -121,6 +126,11 @@ final class ChatService
     private function outOfScopeAnswer(): string
     {
         return 'Saya difokuskan untuk membantu pertanyaan seputar BPS, statistik, publikasi, dan layanan BPS. Coba tanyakan: Apa itu inflasi?, Bagaimana mencari data penduduk?, atau Di mana saya bisa menemukan publikasi BPS?';
+    }
+
+    private function greetingAnswer(): string
+    {
+        return 'Halo! Saya BPS AI Assistant, siap membantu pertanyaan seputar data dan statistik BPS — misalnya: "Apa itu inflasi?", "Berapa jumlah penduduk Jawa Barat tahun 2023?", atau "Publikasi apa saja dari BPS?". Apa yang ingin Anda ketahui?';
     }
 
     private function clarificationQuestion(array $missing): string
