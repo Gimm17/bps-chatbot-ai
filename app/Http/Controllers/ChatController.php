@@ -40,8 +40,9 @@ final class ChatController extends Controller
             );
         }
 
-        // 3. Orchestrate.
-        $response = $this->chatService->handle((string) $message);
+        // 3. Orchestrate. conversationId memungkinkan multi-turn context
+        //    (backend mengingat bubble sebelumnya dalam sesi yang sama).
+        $response = $this->chatService->handle((string) $message, $conversationId);
 
         $status = $response->status;
         $code = match ($status) {
