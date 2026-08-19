@@ -7,6 +7,7 @@ use App\Bps\BpsToolRegistry;
 use App\Bps\Tools\DataeximTool;
 use App\Bps\Tools\GetDynamicDataTool;
 use App\Bps\Tools\GetPublicationTool;
+use App\Bps\Tools\GetStatictableTool;
 use App\Bps\Tools\ListIndicatorsTool;
 use App\Bps\Tools\ListPeriodsTool;
 use App\Bps\Tools\ListPublicationsTool;
@@ -43,6 +44,19 @@ class BpsToolRegistryTest extends TestCase
         $this->assertContains(ListPeriodsTool::class, $classes);
         $this->assertContains(DataeximTool::class, $classes);
         $this->assertContains(SensusDataTool::class, $classes);
+    }
+
+    public function test_numeric_statistic_includes_publication_and_statictable_fallback(): void
+    {
+        // Angka BPS tidak selalu tersedia di dynamic data (mis. proyeksi penduduk
+        // tahun tertentu bisa gagal dirangkum model, atau hanya ada di publikasi/
+        // tabel statis). Registry numeric wajib menyediakan jalur publikasi &
+        // tabel statis sebagai fallback sumber verified BPS.
+        $classes = array_map(fn ($t) => $t::class, $this->registry()->forIntent('numeric_statistic'));
+        $this->assertContains(ListPublicationsTool::class, $classes);
+        $this->assertContains(GetPublicationTool::class, $classes);
+        $this->assertContains(ListStatictablesTool::class, $classes);
+        $this->assertContains(GetStatictableTool::class, $classes);
     }
 
     public function test_bps_service_returns_empty(): void
